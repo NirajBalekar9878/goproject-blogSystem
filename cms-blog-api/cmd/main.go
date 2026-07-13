@@ -32,6 +32,10 @@ func main() {
 	blogService := services.NewBlogService(blogRepo)
 	blogController := controllers.NewBlogController(blogService)
 
+	userRepo := repositories.NewUserRepository()
+	authService := services.NewAuthService(userRepo)
+	authController := controllers.NewAuthController(authService)
+
 	// Initialize Gin router
 	router := gin.New()
 
@@ -40,7 +44,7 @@ func main() {
 	router.Use(middleware.LoggerMiddleware())
 
 	// Register REST API routes
-	routes.RegisterRoutes(router, blogController)
+	routes.RegisterRoutes(router, blogController, authController)
 
 	// Determine port
 	port := os.Getenv("PORT")

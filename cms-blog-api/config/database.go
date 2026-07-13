@@ -35,8 +35,8 @@ func ConnectDatabase() *gorm.DB {
 
 	log.Println("MySQL Database connected successfully")
 
-	// Perform Auto Migration for the Blog model
-	err = DB.AutoMigrate(&models.Blog{})
+	// Perform Auto Migration for Blog and User models
+	err = DB.AutoMigrate(&models.Blog{}, &models.User{})
 	if err != nil {
 		log.Fatalf("Failed to auto migrate database schema: %v", err)
 	}

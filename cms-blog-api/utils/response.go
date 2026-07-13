@@ -53,3 +53,11 @@ func RespondInternalError(c *gin.Context, err string) {
 		Error: err,
 	})
 }
+
+// RespondUnauthorized sends a 401 Unauthorized JSON response.
+func RespondUnauthorized(c *gin.Context, err string) {
+	c.JSON(http.StatusUnauthorized, ErrorResponse{
+		Error: err,
+	})
+}
+

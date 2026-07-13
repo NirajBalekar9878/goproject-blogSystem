@@ -44,12 +44,15 @@ HTTP Request
 
 ### Key Folders & Responsibilities
 - `cmd/main.go` — The entry point of the app. Initializes MySQL, Redis, routes, and starts the HTTP server.
-- `config/` — Connects to MySQL (`database.go`) and auto-migrates database tables (`models.Blog`), plus connects to Redis (`redis.go`).
-- `models/blog.go` — Defines the `Blog` struct with database columns (`gorm`) and validation tags (`binding:"required"`).
-- `controllers/` — Receives HTTP requests, validates input JSON, and sends structured JSON responses.
-- `services/` — Business logic layer that checks Redis before hitting MySQL and automatically invalidates cache on updates.
-- `repositories/` — Directly interacts with MySQL using GORM queries.
-- `middleware/logger.go` — Logs custom performance lines like: `POST /blogs -> 201 Created (20ms)`.
+- `config/` — Connects to MySQL (`database.go`) and auto-migrates database tables (`models.Blog`, `models.User`), plus connects to Redis (`redis.go`).
+- `models/` — Defines the `Blog` and `User` structs with database columns (`gorm`) and validation tags (`binding:"required"`).
+- `controllers/` — Receives HTTP requests (`BlogController`, `AuthController`), validates input JSON, and sends structured JSON responses.
+- `services/` — Business logic layer for blogs (Redis caching & MySQL) and authentication (bcrypt password hashing & login).
+- `repositories/` — Directly interacts with MySQL using GORM queries (`BlogRepository`, `UserRepository`).
+- `middleware/` — Contains custom middleware:
+  - `auth_middleware.go` — Validates `Authorization: Bearer <token>` headers and protects private routes.
+  - `logger.go` — Logs custom performance lines like: `POST /blogs -> 201 Created (20ms)`.
+- `utils/` — Contains JWT token generation & verification (`jwt.go`) and JSON response formatters (`response.go`).
 
 ---
 
@@ -92,9 +95,64 @@ Starting CMS Blog API Server on port 8080...
 
 ## 🧪 Testing the APIs with cURL
 
-### 1. Create a new Blog Post (`POST /blogs`)
+### A. Authentication & JWT Endpoints
+
+#### 1. Register a New User (`POST /auth/register`)
 ```bash
+curl -X POST http://localhost:8080/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "johndoe",
+    "email": "john@example.com",
+    "password": "secretpassword",
+    "role": "admin"
+  }'
+```
+
+#### 2. Login & Receive JWT Token (`POST /auth/login`)
+```bash
+curl -X POST http://localhost:8080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "john@example.com",
+    "password": "secretpassword"
+  }'
+```
+*Response Example:*
+```json
+{
+  "message": "Login successful",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "user": {
+      "id": 1,
+      "username": "johndoe",
+      "email": "john@example.com",
+      "role": "admin"
+    }
+  }
+}
+```
+
+#### 3. Get Authenticated User Profile (`GET /auth/profile` - Protected)
+Set your token in the `Authorization` header:
+```bash
+TOKEN="YOUR_JWT_TOKEN_HERE"
+
+curl -X GET http://localhost:8080/auth/profile \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+### B. Blog Management Endpoints
+
+#### 4. Create a new Blog Post (`POST /blogs` - Protected)
+```bash
+TOKEN="YOUR_JWT_TOKEN_HERE"
+
 curl -X POST http://localhost:8080/blogs \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Getting Started with Golang",
@@ -105,25 +163,28 @@ curl -X POST http://localhost:8080/blogs \
   }'
 ```
 
-### 2. Get All Published Blogs (`GET /blogs`) - Cached in Redis
+#### 5. Get All Published Blogs (`GET /blogs` - Public, Cached in Redis)
 ```bash
 curl http://localhost:8080/blogs
 ```
 *(First call hits MySQL and caches in Redis for 5 minutes. Subsequent calls within 5 minutes return instantly from Redis!)*
 
-### 3. Get Blog by ID (`GET /blogs/1`) - Cached in Redis
+#### 6. Get Blog by ID (`GET /blogs/1` - Public, Cached in Redis)
 ```bash
 curl http://localhost:8080/blogs/1
 ```
 
-### 4. Get Blogs by Category (`GET /blogs/category/Programming`) - Cached in Redis
+#### 7. Get Blogs by Category (`GET /blogs/category/Programming` - Public, Cached in Redis)
 ```bash
 curl http://localhost:8080/blogs/category/Programming
 ```
 
-### 5. Update Blog (`PUT /blogs/1`) - Invalidates Cache
+#### 8. Update Blog (`PUT /blogs/1` - Protected, Invalidates Cache)
 ```bash
+TOKEN="YOUR_JWT_TOKEN_HERE"
+
 curl -X PUT http://localhost:8080/blogs/1 \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Getting Started with Golang (Updated)",
@@ -134,7 +195,11 @@ curl -X PUT http://localhost:8080/blogs/1 \
   }'
 ```
 
-### 6. Delete Blog (`DELETE /blogs/1`) - Invalidates Cache
+#### 9. Delete Blog (`DELETE /blogs/1` - Protected, Invalidates Cache)
 ```bash
-curl -X DELETE http://localhost:8080/blogs/1
+TOKEN="YOUR_JWT_TOKEN_HERE"
+
+curl -X DELETE http://localhost:8080/blogs/1 \
+  -H "Authorization: Bearer $TOKEN"
 ```
+
